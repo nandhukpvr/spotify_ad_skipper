@@ -21,7 +21,7 @@ def get_spotify_title():
         pass
     return None
 
-def restart_and_play():
+def restart_and_play(previous_song_title=None):
     print("Restarting Spotify...")
     # Kill the Spotify process
     subprocess.call(["taskkill", "/F", "/IM", "Spotify.exe"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -47,6 +47,18 @@ def restart_and_play():
     VK_MEDIA_PLAY_PAUSE = 0xB3
     ctypes.windll.user32.keybd_event(VK_MEDIA_PLAY_PAUSE, 0, 0, 0)
     ctypes.windll.user32.keybd_event(VK_MEDIA_PLAY_PAUSE, 0, 2, 0)
+    
+    # Wait a bit for the song to start playing
+    time.sleep(3)
+    
+    # Check if the previously playing song is still playing
+    current_title = get_spotify_title()
+    if previous_song_title and current_title and current_title == previous_song_title:
+        print(f"[{time.strftime('%H:%M:%S')}] Previous song detected after restart. Skipping...")
+        VK_MEDIA_NEXT = 0xB0
+        ctypes.windll.user32.keybd_event(VK_MEDIA_NEXT, 0, 0, 0)
+        ctypes.windll.user32.keybd_event(VK_MEDIA_NEXT, 0, 2, 0)
+        time.sleep(1)  # Wait after skip to ensure it takes effect
 
 def main():
     print("-" * 50)
@@ -54,6 +66,7 @@ def main():
     print("Monitoring Spotify for ads... Press Ctrl+C to exit.")
     print("-" * 50)
     last_title = ""
+    last_song_title = ""
     
     while True:
         title = get_spotify_title()
@@ -74,6 +87,10 @@ def main():
             is_explicit_ad = (title_lower in explicit_ads) or ("advertisement" in title_lower)
             is_implicit_ad = (" - " not in title) and (title_lower not in ["spotify", "spotify free", "spotify premium"])
             
+            # Update last_song_title only if it's a song (not an ad)
+            if not (is_explicit_ad or is_implicit_ad):
+                last_song_title = title
+            
             if is_explicit_ad or is_implicit_ad:
                 # To prevent restarting during quick, normal song transitions where the title might temporarily lack a hyphen
                 time.sleep(1.0) 
@@ -82,8 +99,8 @@ def main():
                 # Double-check if the title is still an ad
                 if current_title and current_title == title:
                     print(f"[{time.strftime('%H:%M:%S')}] Ad detected! (Title: {title}) Closing and restarting Spotify...")
-                    restart_and_play()
-                    last_title = "" # Reset
+                    restart_and_play(last_song_title)
+                    last_title = ""
         
         time.sleep(1.5) # Poll less frequently to save CPU
 
